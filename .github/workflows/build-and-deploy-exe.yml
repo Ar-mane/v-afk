@@ -107,17 +107,21 @@ jobs:
           $content = @(
             "## Download Verification"
             ""
+            "Heads-up: Windows might act dramatic and call this app untrusted."
+            "That is expected for now because this build is not code-signed yet."
+            "No stress, just run the checks below before launching."
+            ""
             "- SHA256: $env:SHA256_VALUE"
           )
 
           if ($env:VT_SKIPPED -eq "false")
           {
-            $content += "- VirusTotal File Report: $env:VT_FILE_URL"
-            $content += "- VirusTotal Analysis Job: $env:VT_ANALYSIS_URL"
+            $content += "- VirusTotal File Report (the scanner squad verdict): $env:VT_FILE_URL"
+            $content += "- VirusTotal Analysis Job (fresh scan run): $env:VT_ANALYSIS_URL"
           }
           else
           {
-            $content += "- VirusTotal upload skipped (VT_API_KEY not configured)"
+            $content += "- VirusTotal upload skipped (no VT_API_KEY configured yet)"
           }
 
           Set-Content `
@@ -132,4 +136,4 @@ jobs:
           name: Release ${{ github.ref_name }}
           files: ${{ steps.paths.outputs.exe_path }}
           body_path: release_body.md
-          generate_release_notes: false
+          generate_release_notes: true
