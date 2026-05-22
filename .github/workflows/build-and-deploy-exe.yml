@@ -1,47 +1,135 @@
-name: Build And Deploy EXE
+name: Build and Deploy EXE
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
-      - master
+
   workflow_dispatch:
 
 permissions:
   contents: write
 
+env:
+  BUILD_DIR: build
+  BUILD_CONFIG: Release
+  EXE_NAME: V-AFK.exe
+  ARTIFACT_NAME: V-AFK-windows-exe
+
 jobs:
   build-windows:
+    name: Build Windows Executable
     runs-on: windows-latest
 
+    defaults:
+      run:
+        shell: pwsh
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure (CMake)
-        run: cmake -S . -B build -A x64
+      - name: Configure project
+        run: >
+          cmake -S . -B $env:BUILD_DIR -A x64
 
-      - name: Build (Release)
-        run: cmake --build build --config Release
+      - name: Build project
+        run: >
+          cmake --build $env:BUILD_DIR --config $env:BUILD_CONFIG
 
-      - name: Upload EXE Artifact
+      - name: Set build paths
+        id: paths
+        run: |
+          $exePath = "$env:BUILD_DIR/$env:BUILD_CONFIG/$env:EXE_NAME"
+
+          "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+
+      - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: V-AFK-windows-exe
-          path: build/Release/V-AFK.exe
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ steps.paths.outputs.exe_path }}
           if-no-files-found: error
 
-      - name: Create GitHub Release And Upload EXE
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Compute SHA256 checksum
+        id: hash
+        run: |
+          $hash = (
+            Get-FileHash `
+              -Algorithm SHA256 `
+              "${{ steps.paths.outputs.exe_path }}"
+          ).Hash.ToLower()
+
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Submit executable to VirusTotal
+        id: virustotal
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VT_API_KEY))
+          {
+            "skipped=true" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $response = curl.exe `
+            --silent `
+            --show-error `
+            --request POST `
+            --url "https://www.virustotal.com/api/v3/files" `
+            --header "x-apikey: $env:VT_API_KEY" `
+            --form "file=@${{ steps.paths.outputs.exe_path }}"
+
+          $json = $response | ConvertFrom-Json
+
+          if (-not $json.data.id)
+          {
+            throw "VirusTotal upload failed: missing analysis id."
+          }
+
+          $analysisId = $json.data.id
+          $sha256 = "${{ steps.hash.outputs.sha256 }}"
+
+          "skipped=false" >> $env:GITHUB_OUTPUT
+          "analysis_url=https://www.virustotal.com/gui/file-analysis/$analysisId" >> $env:GITHUB_OUTPUT
+          "file_url=https://www.virustotal.com/gui/file/$sha256/detection" >> $env:GITHUB_OUTPUT
+
+      - name: Generate release notes
+        env:
+          SHA256_VALUE: ${{ steps.hash.outputs.sha256 }}
+          VT_SKIPPED: ${{ steps.virustotal.outputs.skipped }}
+          VT_FILE_URL: ${{ steps.virustotal.outputs.file_url }}
+          VT_ANALYSIS_URL: ${{ steps.virustotal.outputs.analysis_url }}
+        run: |
+          $content = @(
+            "## Download Verification"
+            ""
+            "- SHA256: $env:SHA256_VALUE"
+          )
+
+          if ($env:VT_SKIPPED -eq "false")
+          {
+            $content += "- VirusTotal File Report: $env:VT_FILE_URL"
+            $content += "- VirusTotal Analysis Job: $env:VT_ANALYSIS_URL"
+          }
+          else
+          {
+            $content += "- VirusTotal upload skipped (VT_API_KEY not configured)"
+          }
+
+          Set-Content `
+            -Path release_body.md `
+            -Value ($content -join "`n") `
+            -Encoding utf8
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Release/V-AFK.exe
-          generate_release_notes: true
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: ${{ steps.paths.outputs.exe_path }}
+          body_path: release_body.md
+          generate_release_notes: false
