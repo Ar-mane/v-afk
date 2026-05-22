@@ -1,47 +1,30 @@
 # V-AFK
 
-Minimal Win32 + DirectX 11 + Dear ImGui desktop app with a Valorant-inspired UI and a threaded anti-AFK bot.
+V-AFK is a Windows desktop utility with a Valorant-style interface that simulates light, human-like input activity to reduce AFK disconnects.
 
-## Stack
+## Screenshots
 
-- C++17
-- Win32
-- DirectX 11
-- Dear ImGui
+<p align="center">
+  <img src="screenshots/vafk-idle.png" alt="V-AFK Idle" width="49%" />
+  <img src="screenshots/vafk-active.png" alt="V-AFK Active" width="49%" />
+</p>
+
+## What This Repo Contains
+
+- A Windows app with a clean Valorant-style interface.
+- Smart anti-AFK behavior with natural activity patterns.
+- Ready-to-download releases with verification details.
+
+## Quick Start
+
+Requirements:
+
+- Windows
+- Visual Studio Build Tools (or Visual Studio with C++ workload)
 - CMake
-- Makefile helpers
+- make available in your shell
 
-## Project Structure
-
-```text
-src/
-  main.cpp       UI, Win32 window, DX11, ImGui render loop
-  bot.cpp        bot worker thread and input logic
-  bot.h          bot interface
-  app_icon.rc    Windows icon resource
-  app_icon.h     icon resource id
-assets/fonts/    custom UI fonts
-app.png          app artwork
-app.ico          Windows executable icon
-CMakeLists.txt   build definition
-Makefile         basic development commands
-```
-
-## Prerequisites
-
-On Windows, make sure you have:
-
-- Visual Studio Build Tools or Visual Studio with C++ support
-- CMake
-- `make` available in your shell
-
-This project is intended to build on Windows.
-
-## Setup
-
-If you already have the repo and dependencies in place, you can go straight to build.
-
-Basic flow:
+Build and run:
 
 ```bash
 make configure
@@ -49,64 +32,24 @@ make build
 make run
 ```
 
-## Development Commands
+## Releases
 
-Use the Makefile for the basic workflow:
+For each GitHub Release, this project is set up to provide:
 
-```bash
-make help
-```
+- Windows executable artifact.
+- SHA256 checksum for integrity verification.
+- VirusTotal links in release notes when available.
 
-Available commands:
+Recommended download flow:
 
-- `make configure` : generate CMake project files into `build/`
-- `make build` : build Release
-- `make build-debug` : build Debug
-- `make build-release` : build Release
-- `make run` : build Release and launch the app
-- `make clean` : remove the `build/` folder
+1. Download V-AFK.exe from the latest Release.
+2. Compare the file SHA256 with the checksum listed in release notes.
+3. Review VirusTotal links from the same release notes.
+4. Run only if verification results are acceptable to you.
 
-## Direct CMake Commands
-
-If you prefer not to use the Makefile:
-
-```bash
-cmake -S . -B build
-cmake --build build --config Release
-```
-
-Release executable output:
-
-```text
-build/Release/V-AFK.exe
-```
-
-## Notes
-
-- `main.cpp` is responsible for UI and rendering only.
-- `bot.cpp` handles the threaded anti-AFK behavior.
-- The EXE icon is provided through the Windows resource file.
-- Custom fonts are loaded from `assets/fonts`.
-
-## Return-To-Project Workflow
-
-If you come back later and just want to continue working:
-
-```bash
-make build-debug
-```
-
-Or if you want to run the app quickly:
-
-```bash
-make run
-```
+Note: Windows SmartScreen warnings can appear for unsigned binaries.
 
 ## Contributing
 
-Ideas, fixes, UI upgrades, and cleanup are always welcome.
-
-Feel free to contribute and make it even cooler :)
-
-happy coding 💻 ...
+Contributions are welcome: bug fixes, UX polish, architecture cleanup, and CI improvements.
 
