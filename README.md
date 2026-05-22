@@ -1,12 +1,34 @@
 # V-AFK
 
-V-AFK is a Windows desktop utility with a Valorant-style interface that simulates light, human-like input activity to reduce AFK disconnects.
+<p align="center">
+  <img src="screenshots/banner.png" alt="V-AFK Banner" width="100%" />
+</p>
 
-## Screenshots
+V-AFK is a Windows desktop utility with a Valorant-style interface that simulates light, human-like input activity to reduce AFK disconnects.
+ 
+Get V-AFK in one click:
 
 <p align="center">
-  <img src="screenshots/vafk-idle.png" alt="V-AFK Idle" width="49%" />
-  <img src="screenshots/vafk-active.png" alt="V-AFK Active" width="49%" />
+  <a href="https://github.com/Ar-mane/v-afk/releases/latest/download/v-afk.exe">
+    <img src="https://img.shields.io/badge/Download-v--afk.exe-ff4655?style=for-the-badge&logo=windows&logoColor=white" alt="Download v-afk.exe" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Ar-mane/v-afk/releases/latest/download/v-afk.exe">Direct EXE link</a>
+  •
+  <a href="https://github.com/Ar-mane/v-afk/releases/latest">Latest release notes</a>
+  •
+  <a href="https://github.com/Ar-mane/v-afk/releases">All releases</a>
+</p>
+
+> Tip: Verify SHA256 from release notes before running the executable.
+
+
+## DEMO
+
+<p align="center">
+  <img src="screenshots/rec3.gif" alt="V-AFK Demo" width="100%" />
 </p>
 
 ## What This Repo Contains
