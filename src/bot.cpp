@@ -1,12 +1,11 @@
 #include "bot.h"
+#include "resource.h"
 
 #include <windows.h>
 
 #include <chrono>
 #include <random>
-#include <string>
 #include <thread>
-#include <vector>
 
 Bot::Bot()
 {
@@ -15,10 +14,7 @@ Bot::Bot()
     m_lastSessionSeconds = 0.0f;
 }
 
-Bot::~Bot()
-{
-    Stop();
-}
+Bot::~Bot() { Stop(); }
 
 void Bot::Start()
 {
@@ -31,16 +27,11 @@ void Bot::Start()
 
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-
         m_startTime = std::chrono::steady_clock::now();
-
         m_lastSessionSeconds = 0.0f;
     }
 
-    m_thread = std::thread(
-        &Bot::WorkerLoop,
-        this
-    );
+    m_thread = std::thread(&Bot::WorkerLoop, this);
 }
 
 void Bot::Stop()
@@ -55,312 +46,141 @@ void Bot::Stop()
         m_thread.join();
     }
 
+    ReleaseAllKeys();
+
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-
-        auto now = std::chrono::steady_clock::now();
-
-        auto elapsed =
-            std::chrono::duration_cast<std::chrono::seconds>(
-                now - m_startTime
-            );
-
-        m_lastSessionSeconds =
-            static_cast<float>(elapsed.count());
+        const auto now = std::chrono::steady_clock::now();
+        m_lastSessionSeconds = static_cast<float>(
+            std::chrono::duration_cast<std::chrono::seconds>(now - m_startTime).count());
     }
 }
 
-bool Bot::IsRunning() const
-{
-    return m_running.load();
-}
+bool Bot::IsRunning() const { return m_running.load(); }
 
-int Bot::GetActions() const
-{
-    return m_actions.load(std::memory_order_relaxed);
-}
+int Bot::GetActions() const { return m_actions.load(std::memory_order_relaxed); }
 
 float Bot::GetSessionTime() const
 {
     if (!m_running.load())
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-
         return m_lastSessionSeconds;
     }
 
     std::chrono::steady_clock::time_point start;
-
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-
         start = m_startTime;
     }
 
-    auto now = std::chrono::steady_clock::now();
-
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::seconds>(
-            now - start
-        );
-
-    return static_cast<float>(elapsed.count());
+    const auto now = std::chrono::steady_clock::now();
+    return static_cast<float>(
+        std::chrono::duration_cast<std::chrono::seconds>(now - start).count());
 }
 
-void Bot::PressKey(
-    int key,
-    int durationMs
-)
+int Bot::KeyFor(char symbol)
 {
-    INPUT input = {};
-
-    input.type = INPUT_KEYBOARD;
-
-    input.ki.wVk = key;
-
-    SendInput(
-        1,
-        &input,
-        sizeof(INPUT)
-    );
-
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(durationMs)
-    );
-
-    input.ki.dwFlags = KEYEVENTF_KEYUP;
-
-    SendInput(
-        1,
-        &input,
-        sizeof(INPUT)
-    );
-
-    m_actions.fetch_add(
-        1,
-        std::memory_order_relaxed
-    );
-}
-
-void Bot::ExecuteAction(
-    const Bot::Action& action
-)
-{
-    switch (action.type)
+    switch (symbol)
     {
-        case Bot::ActionType::MoveForward:
-        {
-            PressKey(
-                'W',
-                action.durationMs
-            );
-
-            break;
-        }
-
-        case Bot::ActionType::MoveBackward:
-        {
-            PressKey(
-                'S',
-                action.durationMs
-            );
-
-            break;
-        }
-
-        case Bot::ActionType::StrafeLeft:
-        {
-            PressKey(
-                'A',
-                action.durationMs
-            );
-
-            break;
-        }
-
-        case Bot::ActionType::StrafeRight:
-        {
-            PressKey(
-                'D',
-                action.durationMs
-            );
-
-            break;
-        }
-
-        case Bot::ActionType::Jump:
-        {
-            PressKey(
-                VK_SPACE,
-                action.durationMs
-            );
-
-            break;
-        }
-
-        case Bot::ActionType::Idle:
-        {
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(action.durationMs)
-            );
-
-            break;
-        }
+    case 'a':
+        return 'A';
+    case 'w':
+        return 'W';
+    case 'd':
+        return 'D';
+    case 's':
+        return 'S';
+    case 'c':
+        return VK_SPACE;
+    default:
+        return 0;
     }
 }
 
-std::vector<Bot::Action> Bot::GetRandomScenario(
-    std::mt19937& rng
-)
+void Bot::ReleaseKey(int key)
 {
-    static const std::vector<std::string> patterns =
+    INPUT up = {};
+    up.type = INPUT_KEYBOARD;
+    up.ki.wVk = static_cast<WORD>(key);
+    up.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &up, sizeof(INPUT));
+}
+
+void Bot::ReleaseAllKeys()
+{
+    ReleaseKey('A');
+    ReleaseKey('W');
+    ReleaseKey('D');
+    ReleaseKey('S');
+    ReleaseKey(VK_SPACE);
+}
+
+void Bot::HoldKey(int key, int durationMs)
+{
+    if (durationMs <= 0)
     {
-        "wwwwwwwwwwwwwwwwaadadadadadadadadddwwwwwwwwwwwwsssswwwwaadadadwwwwwwwwdddwwwwwwwwwwwwwwccwwwwwwaaadddwwwwwwwwww",
-        "adadadadadadadadadadwwwwwwadadadadccwwwwddddaaaawwwwwwwwwwssswwwwwwadadadadadadwwwwwwwwccwwwwwwwwww",
-        "wwwwwwwwwwwwaaaaaaaaaaaawwwwwwwwddddwwwwwwwwwwwwaadadadadwwwwccwwwwwwwwwwwwsssssswwwwddddddddwwwwwwwwww",
-        "wwwwwwwwwwwwssssssssaaaaaaaawwwwddddddddwwwwwwwwwwadadadadadwwwwccwwwwwwsssswwwwwwwwwwwwaaaaddddwwwwwwww",
-        "wwwwwwccwwwwwwccwwwwadadadadadadwwwwwwwwwwaaaaaaaaadddddddddwwwwwwccwwwwwwwwwwwwsssswwwwwwwwadadadadadadwwwwwwww",
-        "wwwwwwwwwwwwwwwwwwaaaawwwwwwwwddddwwwwwwwwwwwwccwwwwwwadadadadwwwwwwwwwwwwsssswwwwaaaawwwwwwwwwwwwddddwwwwww",
-        "wwwwwwwwaadadadwwwwssswwwwwwddddwwwwaaaaccwwwwwwwwwwadadadadadwwwwsssssswwwwwwwwwwwwddddaaaawwwwwwww",
-        "aaaaaaaaddddddddadadadadadadadwwwwsssswwwwccwwwwwwwwwwaaaaaaaaddddddddwwwwwwadadadadwwwwwwwwwwwwsssswwwwwwww",
-        "wwwwwwwwwwwwwwwwwwwwadadadadadadadadadwwwwwwwwsssssssswwwwwwwwwwaaaaddddaaaaddddwwwwwwwwccwwwwwwwwwwww",
-        "sssswwwwsssswwwwadadadadadadadadccwwwwwwwwwwddddddddaaaaaaaawwwwwwwwwwwwwwwsssssssswwwwwwwwadadadad"
-    };
+        return;
+    }
 
-    std::uniform_int_distribution<size_t> patternDist(
-        0,
-        patterns.size() - 1
-    );
+    const WORD vk = static_cast<WORD>(key);
 
-    const std::string& pattern =
-        patterns[patternDist(rng)];
+    INPUT down = {};
+    down.type = INPUT_KEYBOARD;
+    down.ki.wVk = vk;
+    down.ki.dwFlags = 0;
 
-    std::uniform_int_distribution<int> sideTap(85, 155);
-    std::uniform_int_distribution<int> forwardTap(100, 180);
-    std::uniform_int_distribution<int> backTap(120, 230);
-    std::uniform_int_distribution<int> jumpTap(55, 90);
-    std::uniform_int_distribution<int> idleTap(35, 90);
+    INPUT up = down;
+    up.ki.dwFlags = KEYEVENTF_KEYUP;
 
-    std::vector<Bot::Action> actions;
-    actions.reserve(pattern.size() * 2);
+    SendInput(1, &down, sizeof(down));
+    std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
+    SendInput(1, &up, sizeof(up));
 
-    for (size_t i = 0; i < pattern.size();)
+    m_actions.fetch_add(1, std::memory_order_relaxed);
+}
+
+void Bot::RunScenario(std::string_view pattern)
+{
+    for (std::size_t i = 0; i < pattern.size();)
     {
-        char symbol = pattern[i];
-        size_t run = 1;
+        if (!m_running.load())
+        {
+            ReleaseAllKeys();
+            return;
+        }
+
+        const char symbol = pattern[i];
+        std::size_t run = 1;
 
         while (i + run < pattern.size() && pattern[i + run] == symbol)
         {
-            run++;
+            ++run;
         }
 
-        ActionType type = ActionType::Idle;
-        int baseDuration = idleTap(rng);
-        int perRepeat = 8;
-
-        switch (symbol)
+        const int key = KeyFor(symbol);
+        if (key != 0)
         {
-            case 'a':
-            {
-                type = ActionType::StrafeLeft;
-                baseDuration = sideTap(rng);
-                perRepeat = 14;
-                break;
-            }
-
-            case 'd':
-            {
-                type = ActionType::StrafeRight;
-                baseDuration = sideTap(rng);
-                perRepeat = 14;
-                break;
-            }
-
-            case 'w':
-            {
-                type = ActionType::MoveForward;
-                baseDuration = forwardTap(rng);
-                perRepeat = 12;
-                break;
-            }
-
-            case 's':
-            {
-                type = ActionType::MoveBackward;
-                baseDuration = backTap(rng);
-                perRepeat = 12;
-                break;
-            }
-
-            case 'c':
-            {
-                type = ActionType::Jump;
-                baseDuration = jumpTap(rng);
-                perRepeat = 0;
-                break;
-            }
-
-            default:
-            {
-                type = ActionType::Idle;
-                baseDuration = idleTap(rng);
-                perRepeat = 6;
-                break;
-            }
-        }
-
-        int durationMs = baseDuration + static_cast<int>(run - 1) * perRepeat;
-
-        if (durationMs > 650)
-        {
-            durationMs = 650;
-        }
-
-        actions.push_back({
-            type,
-            durationMs
-        });
-
-        if (type != ActionType::Idle)
-        {
-            actions.push_back({
-                ActionType::Idle,
-                idleTap(rng)
-            });
+            HoldKey(key, static_cast<int>(run) * kMsPerChar);
         }
 
         i += run;
     }
-
-    return actions;
 }
 
 void Bot::WorkerLoop()
 {
     std::random_device rd;
-
     std::mt19937 rng(rd());
+    std::uniform_int_distribution<std::size_t> pick(0, kScenarios.size() - 1);
 
     while (m_running.load())
     {
-        std::vector<Bot::Action> scenario =
-            GetRandomScenario(rng);
-
-        for (const Bot::Action& action : scenario)
-        {
-            if (!m_running.load())
-            {
-                return;
-            }
-
-            ExecuteAction(action);
-        }
+        RunScenario(kScenarios[pick(rng)]);
 
         for (int i = 0; i < 50 && m_running.load(); ++i)
         {
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(100)
-            );
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 }
