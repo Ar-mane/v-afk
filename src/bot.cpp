@@ -1,20 +1,21 @@
 #include "bot.h"
-#include "resource.h"
 
-#include <windows.h>
+#include "resource.h"
 
 #include <chrono>
 #include <random>
+#include <string_view>
 #include <thread>
+#include <windows.h>
 
-Bot::Bot()
+Bot::Bot() : m_running(false), m_lastSessionSeconds(0.f)
 {
-    m_running = false;
-    m_actions = 0;
-    m_lastSessionSeconds = 0.0f;
 }
 
-Bot::~Bot() { Stop(); }
+Bot::~Bot()
+{
+    Stop();
+}
 
 void Bot::Start()
 {
@@ -23,12 +24,11 @@ void Bot::Start()
         return;
     }
 
-    m_actions.store(0, std::memory_order_relaxed);
-
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         m_startTime = std::chrono::steady_clock::now();
-        m_lastSessionSeconds = 0.0f;
+        m_lastSessionSeconds = 0.f;
+        m_currentScenario.clear();
     }
 
     m_thread = std::thread(&Bot::WorkerLoop, this);
@@ -51,14 +51,36 @@ void Bot::Stop()
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         const auto now = std::chrono::steady_clock::now();
-        m_lastSessionSeconds = static_cast<float>(
-            std::chrono::duration_cast<std::chrono::seconds>(now - m_startTime).count());
+        m_lastSessionSeconds = static_cast<float>(std::chrono::duration_cast<std::chrono::seconds>(now - m_startTime).count());
+        m_currentScenario.clear();
     }
 }
 
-bool Bot::IsRunning() const { return m_running.load(); }
+bool Bot::IsRunning() const
+{
+    return m_running.load();
+}
 
-int Bot::GetActions() const { return m_actions.load(std::memory_order_relaxed); }
+void Bot::GetScenarioPreview(char* out, size_t outSize) const
+{
+    if (!out || outSize == 0)
+    {
+        return;
+    }
+
+    out[0] = '\0';
+
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    if (m_currentScenario.empty())
+    {
+        return;
+    }
+
+    const size_t len = m_currentScenario.size() < 20 ? m_currentScenario.size() : 20;
+    const size_t copyLen = len < outSize - 1 ? len : outSize - 1;
+    m_currentScenario.copy(out, copyLen);
+    out[copyLen] = '\0';
+}
 
 float Bot::GetSessionTime() const
 {
@@ -75,26 +97,25 @@ float Bot::GetSessionTime() const
     }
 
     const auto now = std::chrono::steady_clock::now();
-    return static_cast<float>(
-        std::chrono::duration_cast<std::chrono::seconds>(now - start).count());
+    return static_cast<float>(std::chrono::duration_cast<std::chrono::seconds>(now - start).count());
 }
 
 int Bot::KeyFor(char symbol)
 {
     switch (symbol)
     {
-    case 'a':
-        return 'A';
-    case 'w':
-        return 'W';
-    case 'd':
-        return 'D';
-    case 's':
-        return 'S';
-    case 'c':
-        return VK_SPACE;
-    default:
-        return 0;
+        case 'a':
+            return 'A';
+        case 'w':
+            return 'W';
+        case 'd':
+            return 'D';
+        case 's':
+            return 'S';
+        case 'c':
+            return VK_SPACE;
+        default:
+            return 0;
     }
 }
 
@@ -123,12 +144,9 @@ void Bot::HoldKey(int key, int durationMs)
         return;
     }
 
-    const WORD vk = static_cast<WORD>(key);
-
     INPUT down = {};
     down.type = INPUT_KEYBOARD;
-    down.ki.wVk = vk;
-    down.ki.dwFlags = 0;
+    down.ki.wVk = static_cast<WORD>(key);
 
     INPUT up = down;
     up.ki.dwFlags = KEYEVENTF_KEYUP;
@@ -136,12 +154,15 @@ void Bot::HoldKey(int key, int durationMs)
     SendInput(1, &down, sizeof(down));
     std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
     SendInput(1, &up, sizeof(up));
-
-    m_actions.fetch_add(1, std::memory_order_relaxed);
 }
 
 void Bot::RunScenario(std::string_view pattern)
 {
+    {
+        std::lock_guard<std::mutex> lock(m_stateMutex);
+        m_currentScenario.assign(pattern.begin(), pattern.end());
+    }
+
     for (std::size_t i = 0; i < pattern.size();)
     {
         if (!m_running.load())

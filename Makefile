@@ -3,7 +3,7 @@ BUILD_DIR := build
 DEBUG_DIR := $(BUILD_DIR)/Debug
 RELEASE_DIR := $(BUILD_DIR)/Release
 
-.PHONY: help configure build build-debug build-release run format clean
+.PHONY: help configure build build-debug build-release kill run format clean
 
 help:
 	@echo "Basic targets:"
@@ -11,12 +11,13 @@ help:
 	@echo "  make build         - build Release"
 	@echo "  make build-debug   - build Debug"
 	@echo "  make build-release - build Release"
-	@echo "  make run           - launch Release exe"
+	@echo "  make run           - stop running app, then launch Release exe"
+	@echo "  make kill          - stop any running V-AFK session"
 	@echo "  make format        - format src/ (clang-format, like prettier)"
 	@echo "  make clean         - remove build folder"
 
 format:
-	  ./clang-format -i src/*.cpp src/*.h
+	  ./clang-format -i src/*.cpp src/*.h src/ui/*.cpp src/ui/*.h
  
 configure:
 	cmake -S . -B $(BUILD_DIR)
@@ -29,7 +30,10 @@ build-debug: configure
 build-release: configure
 	cmake --build $(BUILD_DIR) --config Release
 
-run: build-release
+kill:
+	-powershell -NoProfile -Command "Stop-Process -Name '$(APP_NAME)' -Force -ErrorAction SilentlyContinue"
+
+run: kill build-release 
 	powershell -NoProfile -Command "Start-Process -FilePath './$(RELEASE_DIR)/$(APP_NAME).exe'"
 
 clean:

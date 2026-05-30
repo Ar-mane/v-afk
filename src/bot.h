@@ -2,9 +2,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <mutex>
-#include <random>
-#include <string_view>
+#include <string>
 #include <thread>
 
 class Bot
@@ -17,8 +17,8 @@ class Bot
     void Stop();
 
     bool IsRunning() const;
-    int GetActions() const;
     float GetSessionTime() const;
+    void GetScenarioPreview(char* out, size_t outSize) const;
 
   private:
     static int KeyFor(char symbol);
@@ -29,9 +29,9 @@ class Bot
     void WorkerLoop();
 
     std::atomic<bool> m_running;
-    std::atomic<int> m_actions;
     std::thread m_thread;
     mutable std::mutex m_stateMutex;
     std::chrono::steady_clock::time_point m_startTime;
     float m_lastSessionSeconds;
+    std::string m_currentScenario;
 };

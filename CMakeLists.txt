@@ -25,6 +25,7 @@ endif()
 
 add_executable(V-AFK
     src/main.cpp
+    src/ui/main_view.cpp
     src/bot.cpp
     src/app_icon.rc
 
@@ -56,3 +57,11 @@ target_compile_definitions(V-AFK PRIVATE
 set_target_properties(V-AFK PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
+
+if (EXISTS "${CMAKE_SOURCE_DIR}/assets")
+    add_custom_command(TARGET V-AFK POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets"
+            "$<TARGET_FILE_DIR:V-AFK>/assets"
+        COMMENT "Copy assets next to V-AFK.exe")
+endif()
